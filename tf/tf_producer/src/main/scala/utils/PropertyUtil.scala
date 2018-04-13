@@ -2,11 +2,6 @@ package utils
 
 import java.util.Properties
 
-/**
-  * @ Autheor:ldl
-  *
-  */
-
 object PropertyUtil {
   val properties = new Properties()
 

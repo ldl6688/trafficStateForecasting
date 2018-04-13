@@ -2,63 +2,56 @@ package main
 
 import java.text.DecimalFormat
 import java.util
+import java.util.Calendar
 
 import com.alibaba.fastjson.JSON
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import utils.PropertyUtil
-import org.joda.time.DateTimeUtils
 
 import scala.util.Random
 
-/**
-  * @ Autheor:ldl
-  *
-  */
-
 object Producer {
   def main(args: Array[String]): Unit = {
-    //获取kafka的配置信息
-    val kafkaProperties = PropertyUtil.properties
+    //读取kafka配置信息
+    val props = PropertyUtil.properties
+    //创建生产者
+    val produccer = new KafkaProducer[String, String](props)
 
-    //创建kafka生产者对象
-    val producer = new KafkaProducer[String, String](kafkaProperties)
+    //开始模拟生产数据
+    //不堵车：格式：0001,30~60
+    //堵车：格式：0001,15~30
+    //模拟数据时，当前时间,单位：秒
+    var startTime = Calendar.getInstance().getTimeInMillis / 1000
+    //定义某一个卡口车流状态切换的周期，每过5分钟，切换一次状态,单位：秒
+    val trafficCycle = 60 * 15
 
-    //模拟生产实时数据
-    var startTime = DateTimeUtils.currentTimeMillis() / 1000
-
-    //数据模拟(堵车)切换周期 单位:秒
-    val trafficCycle = 10
-    //循环产生模拟数据
-    while (true) {
-      //模拟产生监测点id
+    while(true){
+      //模拟产生卡口（监测点）id：1~20
       val randomMonitorId = new DecimalFormat("0000").format(Random.nextInt(20) + 1)
-      var randomSpeed = "000"
-      val currentTime = DateTimeUtils.currentTimeMillis() / 1000
 
-      if (currentTime - startTime > trafficCycle) {
-        randomSpeed = new DecimalFormat("000").format(Random.nextInt(16))
-        if (currentTime - startTime > trafficCycle * 2) {
+      //模拟车速
+      var randomSpeed = ""
+      val currentTime = Calendar.getInstance().getTimeInMillis / 1000
+      //每5分钟切换一次
+      if(currentTime - startTime > trafficCycle){
+        randomSpeed = new DecimalFormat("000").format(Random.nextInt(16))//0~15
+        if(currentTime - startTime > trafficCycle * 2){
+          randomSpeed = new DecimalFormat("000").format(Random.nextInt(31) + 30)//30~60
           startTime = currentTime
         }
-      } else {
-        randomSpeed = new DecimalFormat("000").format(Random.nextInt(31) + 30)
+      }else{
+        randomSpeed = new DecimalFormat("000").format(Random.nextInt(31) + 30)//30~60
       }
 
-      println(randomMonitorId + "..." + randomSpeed)
-      //将数据序列化为JSON:K-V结构
       val jsonMap = new util.HashMap[String, String]()
       jsonMap.put("monitor_id", randomMonitorId)
       jsonMap.put("speed", randomSpeed)
 
-      //将每一条数据序列化为一个json事件
       val event = JSON.toJSON(jsonMap)
       println(event)
 
-      //将封装好的数据发送给kafka
-      //      val producerRecord = new ProducerRecord[String,String](kafkaProperties.getProperty("kafka.topics"))
-      //      producer.send(producerRecord,event.toString)
-      producer.send(new ProducerRecord[String, String](kafkaProperties.getProperty("kafka.topics"), event.toString))
-      Thread.sleep(200)
+      produccer.send(new ProducerRecord[String, String](PropertyUtil.getProperty("kafka.topics"), event.toString))
+      Thread.sleep(300)
     }
   }
 }
